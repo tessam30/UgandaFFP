@@ -9,7 +9,6 @@ cd $pathin
 * Convert the .csv files to .dta files so you don't have to insheet each 
 * of them each time
 fs *.csv
-set tr on
 foreach f in `r(files)' {
 	import delimited "`f'", clear
 	local F : subinstr local f ".csv" ""
@@ -103,7 +102,7 @@ include "$pathdo/copylabels.do"
 collapse (mean) poverty_dis poverty  perCapitaExp* meanDepthPov* (count) sample_pov=poverty, by(district)
 include "$pathdo/attachlabels.do"
 la var sample_pov "sample size for poverty indicators"
-
+ren district dis
 save "food_subset.dta", replace
  
 
@@ -169,7 +168,7 @@ la var underwgt "Child is underweight for age"
 la var wasted "Child is wasting"
 
 mean stunted [pweight = chwt], over(dis)
-
+mean mad [pweight = chwt], over(dis)
 * Create some holder vars, fill them with weighted and unweighted estimates by district
 g stunted_dis = .
 g stunted_dis_unwgt = . 
@@ -190,7 +189,7 @@ foreach x of local levels {
 		sum stunted if dis == `x' & agemos <= 36
 		replace stunted_und3_unwgt = `r(mean)' if dis == `x' & agemos <= 36
 		
-		sum mad [pweight = chwt]  if dis == `x'
+		sum mad [weight = chwt]  if dis == `x'
 		replace mad_dis = `r(mean)' if dis == `x'
 }
 
@@ -204,9 +203,14 @@ la var dis "District"
 
 * collapse data down to district level for mission (Parish info does not appear to exist)
 include "$pathdo/copylabels.do"
-collapse (mean) stunted_dis stunted_dis_unwgt stunted_und3 stunted_und3_unwgt mad_dis mad (count) sample_stunting = stunted_dis sample_mad = mad_dis, by(dis)
+collapse (mean) stunted_dis stunted_dis_unwgt stunted_und3 stunted_und3_unwgt /*
+*/ mad_dis mad (count) sample_stunting = stunted_dis sample_mad = mad_dis, by(dis)
 include "$pathdo/attachlabels.do"
 drop if dis == .
+
+la var sample_stunting "sample size used for stunting"
+la var sample_mad "sample size used for minimum acceptable diet"
+
 
 save "health_subset.dta", replace
 
@@ -254,67 +258,31 @@ la var dietdiv_dis "dietary diversity - district ave"
 
 * collapse data down to district level for mission (Parish info does not appear to exist)
 include "$pathdo/copylabels.do"
-collapse (mean) imp_h20 imp_h20_dis imp_sanit imp_sanit_dis dietdiv dietdiv_dis (count) sample_imp = imp_h20, by(dis)
+collapse (mean) imp_h20 imp_h20_dis imp_sanit imp_sanit_dis dietdiv /*
+*/ dietdiv_dis (count) sample_imp = imp_h20 sample_diet = dietdiv, by(dis)
 include "$pathdo/attachlabels.do"
 drop if dis == .
 
 la var sample_imp "sample size from improved water sources"
+la var sample_diet "sample size from dietary diversity stats"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-g imp_h20 = .
-g imp_h20_unwgt = . 
-g imp_sanit = .
-g imp_sanit_unwgt = .
-levelsof dis, local(levels)
-foreach x of local levels {
-		* First replace improved water
-		sum improved_water [weight = hhwt] if dis == `x'
-		replace imp_h20 = `r(mean)' if dis == `x'
-		*sum improved_water  if dis == `x'
-		*replace imp_h20_unwgt = `r(mean)' if dis == `x'
-
-		* Second, replace improved sanitation
-		sum improved_sanitation [weight = hhwt] if dis == `x'
-		replace imp_sanit = `r(mean)' if dis == `x'
-		*sum improved_sanitation if dis == `x'
-		*replace imp_sanit_unwgt = `r(mean)' if dis == `x'
-}
-
-* Collapse down to district level
-include "$pathdo/copylabels.do"
-collapse (mean) imp_h20 improved_water imp_sanit improved_sanitation /*
-*/ (count) samplesize = imp_h20, by(dis)
-include "$pathdo/attachlabels.do"
-
-foreach x of varlist imp_sanit improved_sanitation {
+foreach x of varlist imp_sanit* {
 		replace `x' = . if `x'==0
 }
+
 save "sanit_subset.dta", replace
 
+* Merge all the indicators together for the Uganda Mission so they can map.
+clear
+
+use "$pathout/health_subset.dta", clear
+
+local mlist food sanit
+local i = 1
+foreach x of local mlist {
+	merge 1:1 dis using "$pathout/`x'_subset.dta", gen(merge_`i')
+	la var merge_`i' "merge results from `x'"
+	local i = `i' + 1
+	}
 
 
-
-
-
-
-
-tab dis
-clonevar district = dis
-la def dis 1 "Kaabong" 2 "Kotido" 3 "Abim"/*
-*/4 "Moroto" 5 "Napak" 6 "Nakapiripirit" 7 "Amudat"
-lab values district dis
-	
