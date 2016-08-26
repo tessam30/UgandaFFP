@@ -91,7 +91,7 @@ levelsof dis, local(levels)
 foreach x of varlist poverty perCapitaExp meanDepthPov {
 		gen `x'_dis = .
 	foreach y of local levels {
-			di in yellow "Running over district `y'"
+			di in yellow "Running over district `dy'"
 			sum `x' [weight = mhwt] if dis == `y'
 			replace `x'_dis = `r(mean)' if dis == `y'
 	}
@@ -102,6 +102,13 @@ include "$pathdo/copylabels.do"
 collapse (mean) poverty_dis poverty  perCapitaExp* meanDepthPov* (count) sample_pov=poverty, by(district)
 include "$pathdo/attachlabels.do"
 la var sample_pov "sample size for poverty indicators"
+la var poverty "percent of people living on less than $1.25/day (unweighted) by district"
+la var poverty_dis "percent of people living on less than $1.25/day (weighted) by district"
+la var perCapitaExp "per capita expenditures (unweighted) by district"
+la var perCapitaExp_dis "per capital expenditures (weighted) by district"
+la var meanDepthPov "mean depth of poverty (unweighted) by district"
+la var meanDepthPov_dis "mean depth of poverty (weighted) by district"
+
 ren district dis
 save "food_subset.dta", replace
  
@@ -221,6 +228,11 @@ save "health_subset.dta", replace
 * This contains household information on sanitation and dietary diversity
 use "sanit.dta", clear
 
+* Parish level information exists in variable a03
+tab a03 a04, mi
+tab a03 dis, mi
+tab a04 dis, mi
+
 * eligible_women means women between (15 - 49 years)
 
 # delimit ;
@@ -285,4 +297,9 @@ foreach x of local mlist {
 	local i = `i' + 1
 	}
 
+ren dis district
+la var mad "minimum acceptable diet (unweighted)"
 
+* Export dataset to excel and save for Mission
+export excel using "$pathxls\Uganda_FFP_indicators.xls", firstrow(variables) sheetmodify
+save "$pathout/Uganda_FFP_201603.dta", replace
